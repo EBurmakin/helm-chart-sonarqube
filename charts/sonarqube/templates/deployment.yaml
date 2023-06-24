@@ -1,83 +1,24 @@
-{{- if eq .Values.deploymentType "Deployment"}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: {{ template "sonarqube.fullname" . }}
-  labels:
-    app: {{ template "sonarqube.name" . }}
-    chart: {{ .Chart.Name }}-{{ .Chart.Version | replace "+" "_" }}
-    release: {{ .Release.Name }}
-    heritage: {{ .Release.Service }}
-    app.kubernetes.io/name: {{ template "sonarqube.name" . }}-{{ template "sonarqube.fullname" . }}
-    app.kubernetes.io/instance: {{ .Release.Name }}
-    app.kubernetes.io/managed-by: {{ .Release.Service }}
-    app.kubernetes.io/part-of: sonarqube
-    app.kubernetes.io/component: {{ template "sonarqube.fullname" . }}
-    app.kubernetes.io/version: {{ tpl .Values.image.tag . | quote }}
 spec:
   replicas: {{ .Values.replicaCount }}
   selector:
     matchLabels:
       app: {{ template "sonarqube.name" . }}
       release: {{ .Release.Name }}
-{{- if .Values.deploymentStrategy }}
-  strategy:
-{{ toYaml .Values.deploymentStrategy | indent 4 }}
-{{- end }}
   template:
     metadata:
       labels:
         app: {{ template "sonarqube.name" . }}
         release: {{ .Release.Name }}
-{{- with .Values.podLabels }}
-{{ toYaml . | indent 8 }}
-{{- end }}
-      annotations:
-        checksum/init-sysctl: {{ include (print $.Template.BasePath "/init-sysctl.yaml") . | sha256sum }}
-        checksum/plugins: {{ include (print $.Template.BasePath "/install-plugins.yaml") . | sha256sum }}
-        checksum/config: {{ include (print $.Template.BasePath "/config.yaml") . | sha256sum }}
-        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
-{{- if .Values.prometheusExporter.enabled }}
-        checksum/prometheus-config: {{ include (print $.Template.BasePath "/prometheus-config.yaml") . | sha256sum }}
-        checksum/prometheus-ce-config: {{ include (print $.Template.BasePath "/prometheus-ce-config.yaml") . | sha256sum }}
-{{- end }}
-{{- if .Values.annotations}}
-      {{- range $key, $value := .Values.annotations }}
-        {{ $key }}: {{ $value | quote }}
-      {{- end }}
-{{- end }}
     spec:
-    {{- if .Values.schedulerName }}
       schedulerName: {{ .Values.schedulerName }}
-    {{- end }}
       securityContext:
 {{ toYaml .Values.securityContext | indent 8 }}
-      {{- if or .Values.image.pullSecrets .Values.image.pullSecret }}
       imagePullSecrets:
-        {{- if .Values.image.pullSecret }}
         - name: {{ .Values.image.pullSecret }}
-        {{- end }}
-        {{- if .Values.image.pullSecrets}}
-{{ toYaml .Values.image.pullSecrets | indent 8 }}
-        {{- end }}
-      {{- end }}
-      initContainers:
-      {{- if .Values.extraInitContainers }}
-{{ toYaml .Values.extraInitContainers | indent 8 }}
-      {{- end }}
-      {{- if .Values.postgresql.enabled }}
-        - name: "wait-for-db"
-          image: {{ default "busybox:1.32" .Values.initContainers.image }}
-          imagePullPolicy: {{ .Values.image.pullPolicy  }}
-          {{- if $securityContext := .Values.initContainers.securityContext }}
-          securityContext:
-{{ toYaml $securityContext | indent 12 }}
-          {{- end }}
-          resources:
-{{ toYaml .Values.initContainers.resources | indent 12 }}
-          command: ["/bin/sh", "-c", "for i in $(seq 1 200); do nc -z -w3 {{ .Release.Name}}-postgresql 5432 && exit 0 || sleep 2; done; exit 1"]
-      {{- end }}
-      {{- if .Values.caCerts.enabled }}
         - name: ca-certs
           image: {{ default "adoptopenjdk/openjdk11:alpine" .Values.caCerts.image }}
           imagePullPolicy: {{ .Values.image.pullPolicy  }}
